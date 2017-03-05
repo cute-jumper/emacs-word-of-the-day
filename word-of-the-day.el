@@ -89,7 +89,7 @@ XML encoding declaration."
   `(wotd--retrieve
     ,url nil
     (delete-region (point-min) (point))
-    (let ((res ,@body)
+    (let ((res (progn ,@body))
           dom)
       (with-current-buffer (get-buffer-create ,buf-name)
         (erase-buffer)
@@ -202,6 +202,23 @@ XML encoding declaration."
       (let* ((title (match-string 1))
              (href (format "http://dictionary.cambridge.org/us/dictionary/british/%s"
                            (url-hexify-string title)))
+             (description (match-string 2)))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
+
+(defun wotd--get-collins-dictionary ()
+  (wotd--def-html-parser
+      "*Collins Dictionary*"
+      "https://www.collinsdictionary.com/dictionary/english"
+    (replace-regexp "\n" "")
+    (goto-char (point-min))
+    (message "%s" (buffer-string))
+    (when (re-search-forward
+           "Word of the day.*?\"promoBox-title\">\\(.*?\\)</div>.*?\"promoBox-description\">\\(.*?\\)</div>"
+           nil
+           t)
+      (let* ((title (match-string 1))
+             (href (format "https://www.collinsdictionary.com/dictionary/english/%s"
+                           (url-hexify-string (replace-regexp-in-string " " "-" title))))
              (description (match-string 2)))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
 
