@@ -190,6 +190,17 @@ XML encoding declaration."
              (description (nth 2 (car (xml-get-children item 'description)))))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
                 href title date description))))
+(defun wotd--get-oxford-dictionaries ()
+  (wotd--def-html-parser
+      "*Oxford Dictionaries*"
+      "https://en.oxforddictionaries.com/"
+    (when (re-search-forward
+           "Word of the Day.*?<a.*?>\\(.*?\\)</a>"
+           nil
+           t)
+      (let* ((title (match-string 1))
+             (href (format "https://en.oxforddictionaries.com/definition/%s" title)))
+        (format "<h1>%s</h1><a href=\"%s\">See the definition and examples</a>" title href)))))
 
 (defun wotd--get-cambridge-dictionary ()
   (wotd--def-html-parser
@@ -211,7 +222,6 @@ XML encoding declaration."
       "https://www.collinsdictionary.com/dictionary/english"
     (replace-regexp "\n" "")
     (goto-char (point-min))
-    (message "%s" (buffer-string))
     (when (re-search-forward
            "Word of the day.*?\"promoBox-title\">\\(.*?\\)</div>.*?\"promoBox-description\">\\(.*?\\)</div>"
            nil
