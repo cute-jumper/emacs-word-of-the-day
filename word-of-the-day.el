@@ -114,12 +114,13 @@ XML encoding declaration."
       (let* ((entry (car (last (xml-get-children (car it) 'entry))))
              (title (nth 2 (car (xml-get-children entry 'title))))
              (href (cdr (nth 1 (cadr (car (xml-get-children entry 'link))))))
-             (date (nth 2 (car (xml-get-children entry 'updated)))))
+             (date (nth 2 (car (xml-get-children entry 'updated))))
+             (summary (nth 2 (car (xml-get-children entry 'summary)))))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
                 href
                 title
                 date
-                (nth 2 (car (xml-get-children entry 'summary)))))))
+                summary))))
 
 (defun wotd--get-wordsmith ()
   (wotd--def-xml-parser
@@ -154,6 +155,20 @@ XML encoding declaration."
       (let* ((item (car (last (xml-get-children
                                (car (xml-get-children (car it) 'channel))
                                'item))))
+             (title (nth 2 (car (xml-get-children item 'title))))
+             (href (nth 2 (car (xml-get-children item 'link))))
+             (date (nth 2 (car (xml-get-children item 'pubDate))))
+             (description (nth 2 (car (xml-get-children item 'description)))))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                href title date description))))
+
+(defun wotd--get-urban-dictionary ()
+  (wotd--def-xml-parser
+      "*Urban Dictionary*"
+      "http://feeds.urbandictionary.com/UrbanWordOfTheDay"
+      (let* ((item (car (xml-get-children
+                         (car (xml-get-children (car it) 'channel))
+                         'item)))
              (title (nth 2 (car (xml-get-children item 'title))))
              (href (nth 2 (car (xml-get-children item 'link))))
              (date (nth 2 (car (xml-get-children item 'pubDate))))
