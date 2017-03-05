@@ -84,6 +84,21 @@ XML encoding declaration."
           (shr-insert-document dom)))
       (display-buffer ,buf-name t))))
 
+(defmacro wotd--def-html-parser (buf-name url &rest body)
+  (declare (indent 2))
+  `(wotd--retrieve
+    ,url nil
+    (delete-region (point-min) (point))
+    (let ((res ,@body)
+          dom)
+      (with-current-buffer (get-buffer-create ,buf-name)
+        (erase-buffer)
+        (insert res)
+        (setq dom (libxml-parse-html-region (point-min) (point-max)))
+        (erase-buffer)
+        (shr-insert-document dom))
+      (display-buffer ,buf-name t))))
+
 (defun wotd--get-merriam-webster ()
   (wotd--def-xml-parser
       "*Merriam-Webster*"
@@ -175,6 +190,21 @@ XML encoding declaration."
              (description (nth 2 (car (xml-get-children item 'description)))))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
                 href title date description))))
+
+(defun wotd--get-cambridge-dictionary ()
+  (wotd--def-html-parser
+      "*Cambridge Dictionary*"
+      "http://dictionary.cambridge.org/us/"
+    (when (re-search-forward
+           "<p class=\"h4 feature-w-big wotd-hw\">\\(.*?\\)</p><p>\\(.*\\)</p>"
+           nil
+           t)
+      (let* ((title (match-string 1))
+             (href (format "http://dictionary.cambridge.org/us/dictionary/british/%s"
+                           (url-hexify-string title)))
+             (description (match-string 2)))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
+
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
