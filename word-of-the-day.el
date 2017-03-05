@@ -147,5 +147,19 @@ XML encoding declaration."
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
                 href title date description))))
 
+(defun wotd--get-oxford-english-dictionary ()
+  (wotd--def-xml-parser
+      "*Oxford English Dictionary*"
+      "http://www.oed.com/rss/wordoftheday"
+      (let* ((item (car (last (xml-get-children
+                               (car (xml-get-children (car it) 'channel))
+                               'item))))
+             (title (nth 2 (car (xml-get-children item 'title))))
+             (href (nth 2 (car (xml-get-children item 'link))))
+             (date (nth 2 (car (xml-get-children item 'pubDate))))
+             (description (nth 2 (car (xml-get-children item 'description)))))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                href title date description))))
+
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
