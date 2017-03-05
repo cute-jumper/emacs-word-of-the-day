@@ -67,53 +67,59 @@ XML encoding declaration."
                        ,@body)))))
 
 (defmacro wotd--def-xml-parser (buf-name url content &rest cleanups)
+  (declare (indent 3))
   `(wotd--retrieve
     ,url nil
-    (let ((res-xml (wotd-xml-parse-region (point) (point-max))))
+    (let ((it (wotd-xml-parse-region (point) (point-max))))
       (with-current-buffer (get-buffer-create ,buf-name)
-        (wotd--display-and-cleanup
-            ,content
-          ,@cleanups)
+        (erase-buffer)
+        (insert ,content)
+        ,@(apply #'append
+                 (mapcar (lambda (fn)
+                           `((goto-char (point-min))
+                             ,fn))
+                         cleanups))
         (let ((dom (libxml-parse-html-region (point-min) (point-max))))
           (erase-buffer)
           (shr-insert-document dom)))
       (display-buffer ,buf-name t))))
 
-(defmacro wotd--display-and-cleanup (content &rest cleanups)
-  (declare (indent 1))
-  `(progn
-     (erase-buffer)
-     (insert ,content)
-     ,@(apply #'append
-              (mapcar (lambda (fn)
-                        `((goto-char (point-min))
-                          ,fn))
-                      cleanups))))
-
 (defun wotd--get-merriam-webster ()
   (wotd--def-xml-parser
-   "*Merriam-Webster*"
-   "https://www.merriam-webster.com/wotd/feed/rss2"
-   (nth 2 (car (xml-get-children
-                (car (xml-get-children
-                      (car (xml-get-children (car res-xml) 'channel))
-                      'item))
-                'description)))
-   (replace-string "&#149;" "&#8226;")))
+      "*Merriam-Webster*"
+      "https://www.merriam-webster.com/wotd/feed/rss2"
+      (nth 2 (car (xml-get-children
+                   (car (xml-get-children
+                         (car (xml-get-children (car it) 'channel))
+                         'item))
+                   'description)))
+    (replace-string "&#149;" "&#8226;")))
 
 (defun wotd--get-wiktionary ()
   (wotd--def-xml-parser
-   "*Wiktionary*"
-   "https://en.wiktionary.org/w/api.php?action=featuredfeed&feed=wotd"
-   (nth 2 (car (xml-get-children
-                (car (nreverse
-                      (xml-get-children
-                       (car (xml-get-children (car res-xml) 'channel))
-                       'item)))
-                'description)))
-   (replace-string "href=\"//" "href=\"https://")
-   (replace-string "href=\"/wiki" "href=\"https://en.wiktionary.org/wiki")))
+      "*Wiktionary*"
+      "https://en.wiktionary.org/w/api.php?action=featuredfeed&feed=wotd"
+      (nth 2 (car (xml-get-children
+                   (last (xml-get-children
+                          (car (xml-get-children (car it) 'channel))
+                          'item))
+                   'description)))
+    (replace-string "href=\"//" "href=\"https://")
+    (replace-string "href=\"/wiki" "href=\"https://en.wiktionary.org/wiki")))
 
+(defun wotd--get-macmillan ()
+  (wotd--def-xml-parser
+      "*Macmillan*"
+      "http://www.macmillandictionary.com/wotd/wotdrss.xml"
+      (let* ((entry (car (last (xml-get-children (car it) 'entry))))
+             (title (nth 2 (car (xml-get-children entry 'title))))
+             (href (cdr (nth 1 (cadr (car (xml-get-children entry 'link))))))
+             (date (nth 2 (car (xml-get-children entry 'updated)))))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                href
+                title
+                date
+                (nth 2 (car (xml-get-children entry 'summary)))))))
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
