@@ -28,6 +28,9 @@
 (require 'xml)
 (require 'shr)
 
+(defvar wotd--debug nil)
+(defvar wotd--default-buf-name "*Word-of-The-Day*")
+
 ;; Steal from `elfeed'
 (defun wotd-xml-parse-region (&optional beg end buffer parse-dtd _parse-ns)
   "Decode (if needed) and parse XML file. Uses coding system from
@@ -54,29 +57,63 @@ XML encoding declaration."
 (defmacro wotd--retrieve (url sync &rest body)
   (if sync
       `(with-current-buffer (url-retrieve-synchronously ,url)
+         (goto-char url-http-end-of-headers)
          ,@body)
     `(url-retrieve ,url
                    (lambda (status)
                      (if (plist-get status :error)
                          (error "Error when retrieving %s" ,url)
+                       (goto-char url-http-end-of-headers)
                        ,@body)))))
 
+(defmacro wotd--def-xml-parser (buf-name url content &rest cleanups)
+  `(wotd--retrieve
+    ,url nil
+    (let ((res-xml (wotd-xml-parse-region (point) (point-max))))
+      (with-current-buffer (get-buffer-create ,buf-name)
+        (wotd--display-and-cleanup
+            ,content
+          ,@cleanups)
+        (let ((dom (libxml-parse-html-region (point-min) (point-max))))
+          (erase-buffer)
+          (shr-insert-document dom)))
+      (display-buffer ,buf-name t))))
+
+(defmacro wotd--display-and-cleanup (content &rest cleanups)
+  (declare (indent 1))
+  `(progn
+     (erase-buffer)
+     (insert ,content)
+     ,@(apply #'append
+              (mapcar (lambda (fn)
+                        `((goto-char (point-min))
+                          ,fn))
+                      cleanups))))
+
 (defun wotd--get-merriam-webster ()
-  (wotd--retrieve
-   "https://www.merriam-webster.com/wotd/feed/rss2" nil
-   (goto-char url-http-end-of-headers)
-   (let ((res-xml (wotd-xml-parse-region (point) (point-max)))
-         (res-buf (get-buffer-create "*Merriam-Webster*")))
-     (with-current-buffer res-buf
-       (erase-buffer)
-       (insert (nth 2 (car (xml-get-children
-                            (car (xml-get-children
-                                  (car (xml-get-children (car res-xml) 'channel))
-                                  'item))
-                            'description))))
-       (goto-char (point-min))
-       (replace-string "&#149;" "&#8226;")
-       (shr-render-buffer (current-buffer))))))
+  (wotd--def-xml-parser
+   "*Merriam-Webster*"
+   "https://www.merriam-webster.com/wotd/feed/rss2"
+   (nth 2 (car (xml-get-children
+                (car (xml-get-children
+                      (car (xml-get-children (car res-xml) 'channel))
+                      'item))
+                'description)))
+   (replace-string "&#149;" "&#8226;")))
+
+(defun wotd--get-wiktionary ()
+  (wotd--def-xml-parser
+   "*Wiktionary*"
+   "https://en.wiktionary.org/w/api.php?action=featuredfeed&feed=wotd"
+   (nth 2 (car (xml-get-children
+                (car (nreverse
+                      (xml-get-children
+                       (car (xml-get-children (car res-xml) 'channel))
+                       'item)))
+                'description)))
+   (replace-string "href=\"//" "href=\"https://")
+   (replace-string "href=\"/wiki" "href=\"https://en.wiktionary.org/wiki")))
+
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
