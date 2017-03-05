@@ -121,5 +121,17 @@ XML encoding declaration."
                 date
                 (nth 2 (car (xml-get-children entry 'summary)))))))
 
+(defun wotd--get-wordsmith ()
+  (wotd--def-xml-parser
+      "*Wordsmith*"
+      "https://www.wordsmith.org/awad/rss1.xml"
+      (let* ((item (car (xml-get-children
+                         (car (xml-get-children (car it) 'channel))
+                         'item)))
+             (title (nth 2 (car (xml-get-children item 'title))))
+             (href (nth 2 (car (xml-get-children item 'link))))
+             (description (nth 2 (car (xml-get-children item 'description)))))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description))))
+
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
