@@ -264,6 +264,14 @@ XML encoding declaration."
                 (lambda (ch) (encode-coding-char ch 'utf-8 'unicode))
                 (buffer-string))))))))
 
+(defun wotd--get-wordnik ()
+  (wotd--def-html-parser
+      "*Wordnik*"
+      "https://www.wordnik.com/word-of-the-day"
+    (let* ((beg (re-search-forward "<div class=\"word_of_the_day\">" nil t))
+           (end (re-search-forward "<!-- Wordnik announcement -->" nil t)))
+      (buffer-substring beg end))))
+
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
