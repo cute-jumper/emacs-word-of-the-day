@@ -28,8 +28,16 @@
 (require 'xml)
 (require 'shr)
 
-(defvar wotd--debug nil)
+(defvar wotd--enable-debug nil)
+(defvar wotd--debug-buffer "*WOTD Debug*")
 (defvar wotd--default-buf-name "*Word-of-The-Day*")
+
+(defun wotd--debug (s)
+  (if wotd--enable-debug
+      (with-current-buffer (get-buffer-create wotd--debug-buffer)
+        (erase-buffer)
+        (insert (format "%s" s))))
+  s)
 
 ;; Steal from `elfeed'
 (defun wotd-xml-parse-region (&optional beg end buffer parse-dtd _parse-ns)
@@ -81,7 +89,8 @@ XML encoding declaration."
                          cleanups))
         (let ((dom (libxml-parse-html-region (point-min) (point-max))))
           (erase-buffer)
-          (shr-insert-document dom)))
+          (shr-insert-document dom)
+          (goto-char (point-min))))
       (display-buffer ,buf-name t))))
 
 (defmacro wotd--def-html-parser (buf-name url &rest body)
@@ -91,12 +100,15 @@ XML encoding declaration."
     (delete-region (point-min) (point))
     (let ((res (progn ,@body))
           dom)
+      (wotd--debug res)
       (with-current-buffer (get-buffer-create ,buf-name)
+        (set-buffer-multibyte t)
         (erase-buffer)
         (insert res)
         (setq dom (libxml-parse-html-region (point-min) (point-max)))
         (erase-buffer)
-        (shr-insert-document dom))
+        (shr-insert-document dom)
+        (goto-char (point-min)))
       (display-buffer ,buf-name t))))
 
 (defun wotd--get-merriam-webster ()
@@ -231,6 +243,26 @@ XML encoding declaration."
                            (url-hexify-string (replace-regexp-in-string " " "-" title))))
              (description (match-string 2)))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
+
+(defun wotd--get-learners-dictionary ()
+  (wotd--def-html-parser
+      "*Learners Dictionary*"
+      "http://learnersdictionary.com/word-of-the-day"
+    (let* ((beg (re-search-forward "<!--WOD content-->" nil t))
+           (end (re-search-forward "<!--WOD Archive-->" nil t))
+           (content (buffer-substring beg end)))
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (replace-regexp "[\r\n]" "")
+        (goto-char (point-min))
+        (replace-regexp "<span class = \"hpron_word voces_font\">/.*?/</span>\\|\
+<!--headword: mobile view-->.*<!--hwpost-->" "")
+        (string-join
+         (delq nil
+               (mapcar
+                (lambda (ch) (encode-coding-char ch 'utf-8 'unicode))
+                (buffer-string))))))))
 
 
 (provide 'word-of-the-day)
