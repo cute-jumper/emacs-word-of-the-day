@@ -66,12 +66,14 @@ XML encoding declaration."
   (if sync
       `(with-current-buffer (url-retrieve-synchronously ,url)
          (goto-char url-http-end-of-headers)
+         (set-buffer-multibyte t)
          ,@body)
     `(url-retrieve ,url
                    (lambda (status)
                      (if (plist-get status :error)
                          (error "Error when retrieving %s" ,url)
                        (goto-char url-http-end-of-headers)
+                       (set-buffer-multibyte t)
                        ,@body)))))
 
 (defmacro wotd--def-xml-parser (buf-name url content &rest cleanups)
@@ -283,9 +285,19 @@ XML encoding declaration."
   (wotd--def-html-parser
       "*Wordnik*"
       "https://www.wordnik.com/word-of-the-day"
-    (let* ((beg (re-search-forward "<div class=\"word_of_the_day\">" nil t))
-           (end (re-search-forward "<!-- Wordnik announcement -->" nil t)))
+    (let ((beg (re-search-forward "<div class=\"word_of_the_day\">" nil t))
+          (end (re-search-forward "<!-- Wordnik announcement -->" nil t)))
       (buffer-substring beg end))))
+
+(defun wotd--get-bing-dict ()
+  (wotd--def-html-parser
+      "*Bing Dict*"
+      "http://www.bing.com/dict/?mkt=zh-cn"
+    (let ((beg (re-search-forward "<div class=\"client_daily_words_panel\">" nil t))
+          (end (re-search-forward "</div><div class=\"client_daily_pic_bar\">" nil t)))
+      (replace-regexp-in-string
+       "/dict/search" "http://www.bing.com/dict/search"
+       (buffer-substring beg end)))))
 
 
 (provide 'word-of-the-day)
