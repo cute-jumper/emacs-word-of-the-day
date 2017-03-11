@@ -202,6 +202,21 @@ XML encoding declaration."
              (description (nth 2 (car (xml-get-children item 'description)))))
         (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
                 href title date description))))
+
+(defun wotd--get-wordthink ()
+  (wotd--def-xml-parser
+      "*WordThink*"
+      "http://www.wordthink.com/feed/"
+      (let* ((item (car (xml-get-children
+                         (car (xml-get-children (car it) 'channel))
+                         'item)))
+             (title (nth 2 (car (xml-get-children item 'title))))
+             (href (nth 2 (car (xml-get-children item 'link))))
+             (date (nth 2 (car (xml-get-children item 'pubDate))))
+             (description (nth 2 (car (xml-get-children item 'description)))))
+        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                href title date description))))
+
 (defun wotd--get-oxford-dictionaries ()
   (wotd--def-html-parser
       "*Oxford Dictionaries*"
