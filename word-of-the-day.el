@@ -30,6 +30,7 @@
 (require 'org-table)
 
 (defvar wotd-buffer "*Summary: Word of The Day")
+(defvar wotd-render-width (frame-width))
 
 (defvar wotd-supported-sources
   '(merriam-webster
@@ -49,8 +50,6 @@
     bing-dict))
 
 (defvar wotd--enable-debug nil)
-(defvar wotd--sync nil)
-(defvar wotd--interactive t)
 (defvar wotd--debug-buffer "*WOTD Debug*")
 (defvar wotd--default-buf-name "*Word-of-The-Day*")
 
@@ -117,7 +116,8 @@ XML encoding declaration."
                         (setq dom (libxml-parse-html-region
                                    (point-min) (point-max)))
                         (erase-buffer)
-                        (shr-insert-document dom)
+                        (let ((shr-width wotd-render-width))
+                          (shr-insert-document dom))
                         (buffer-string)))
         ,(if sync
              '(cons (car res) content)
@@ -153,18 +153,18 @@ XML encoding declaration."
                                     'item))))
                   (html (nth 2 (car (xml-get-children
                                      item
-                                     'description)))))
+                                     'description))))
+                  title)
              (with-temp-buffer
                (insert html)
                (goto-char (point-min))
                (re-search-forward "<table" nil t)
                (delete-region (point-min) (match-beginning 0))
-               (setq html (buffer-string)))
+               (setq html (buffer-string))
+               (re-search-forward "<span id=\"WOTD-rss-title\">\\(.*?\\)</span>")
+               (setq title (match-string 1)))
              ,(if sync
-                  '(cons (nth 2 (car (xml-get-children
-                                      item
-                                      'title)))
-                         html)
+                  '(cons title html)
                 'html)))))
 
 (defun wotd--get-macmillan (&optional sync)
@@ -395,14 +395,13 @@ XML encoding declaration."
                                  (forward-sexp)
                                  (point)))
              (setq wotd-alist
-                   (assoc-default
-                    (format-time-string "%Y-%m-%d")
-                    (assoc-default "days"
-                                   (json-read-from-string
-                                    (buffer-substring (point)
-                                                      (save-excursion
-                                                        (forward-sexp)
-                                                        (point)))))))
+                   (cdr (car (last
+                              (assoc-default "days"
+                                             (json-read-from-string
+                                              (buffer-substring (point)
+                                                                (save-excursion
+                                                                  (forward-sexp)
+                                                                  (point)))))))))
              (setq word (assoc-default
                          "word" wotd-alist))
              (setq html
@@ -456,11 +455,6 @@ XML encoding declaration."
                      (cons (match-string 1) html))
                 'html)))))
 
-(defun wotd--get-formatted-text (func)
-  (let ((wotd--sync t)
-        (wotd--interactive nil))
-    (funcall func t)))
-
 (defun wotd-show (source)
   (interactive
    (list (completing-read "Select a source: " wotd-supported-sources)))
@@ -469,21 +463,29 @@ XML encoding declaration."
 
 (defun wotd-all ()
   (interactive)
-  (let ((wotd--sync t)
-        (wotd--interactive nil))
-    (with-current-buffer (get-buffer-create wotd-buffer)
-      (erase-buffer)
-      (unless (bound-and-true-p orgstruct-mode)
-        (orgstruct-mode +1))
-      (insert (with-temp-buffer
-                (insert "* first\n")
-                (insert (replace-regexp-in-string "\n" "\n  " (wotd--get-wordnik)))
-                (delete-backward-char 2)
-                (insert "* second\n")
-                (insert (replace-regexp-in-string "\n" "\n  "(wotd--get-dictionary-dot-com)))
-                (buffer-string))))
-    (unless (get-buffer-window wotd-buffer)
-      (display-buffer wotd-buffer))))
+  (with-current-buffer (get-buffer-create wotd-buffer)
+    (erase-buffer)
+    (unless (bound-and-true-p orgstruct-mode)
+      (orgstruct-mode +1))
+    (dolist (source wotd-supported-sources)
+      (let* ((func (intern (format "wotd--get-%s" source)))
+             (result (funcall func t)))
+        (insert (with-temp-buffer
+                  (insert (propertize (format "* %s" (car result))
+                                      'face
+                                      'org-level-1)
+                          "\n  ")
+                  (insert (replace-regexp-in-string "\n" "\n  " (cdr result)))
+                  (delete-backward-char 2)
+                  (buffer-string))
+                "\n")))
+    (goto-char (point-min))
+    (save-excursion
+      (while (re-search-forward "^* " nil t)
+        (goto-char (match-beginning 0))
+        (org-cycle)
+        (forward-line))))
+  (switch-to-buffer-other-window wotd-buffer))
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
