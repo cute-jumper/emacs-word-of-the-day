@@ -360,21 +360,5 @@ XML encoding declaration."
        "/dict/search" "http://www.bing.com/dict/search"
        (buffer-substring beg end)))))
 
-(url-unhex-string "http%3A%2F%2Fstatic.sfdict.com%2Fstatic%2Fwotd%2Ftiles%2F20170311_canard.png")
-(switch-to-buffer
- (url-retrieve-synchronously
-  "http://www.dictionary.com/wordoftheday/2017/3/11"))
-(switch-to-buffer
- (url-retrieve-synchronously
-  "http://static.sfdict.com/static/wotd/tiles/20170311_canard.png"))
-(switch-to-buffer
- (url-retrieve-synchronously
-  "http://restcdn.dictionary.com/v2/wordoftheday.json?\
-api_key=KgprXEYKVnNSFSZ\
-&past=0&future=0\
-&year=2017&month=3&day=11&callback=jQuery21408437490691929453_1489270736001"))
-;;; TODO
-;;; dictionary.com
-
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
