@@ -289,6 +289,67 @@ XML encoding declaration."
           (end (re-search-forward "<!-- Wordnik announcement -->" nil t)))
       (buffer-substring beg end))))
 
+(defun wotd--get-dictionary-dot-com ()
+  (wotd--def-html-parser
+      "*dictionary.com*"
+      (concat "http://www.dictionary.com/wordoftheday/"
+              (format-time-string "%Y/%m/%d"))
+    (let ((json-key-type 'string)
+          wotd-alist
+          word
+          pos-pronun
+          definitions
+          origin
+          cite
+          citations)
+      (re-search-forward "return {\"leader" nil t)
+      (goto-char (match-beginning 0))
+      (forward-word)
+      (buffer-substring (point)
+                        (save-excursion
+                          (forward-sexp)
+                          (point)))
+      (setq wotd-alist
+            (assoc-default
+             (format-time-string "%Y-%m-%d")
+             (assoc-default "days"
+                            (json-read-from-string
+                             (buffer-substring (point)
+                                               (save-excursion
+                                                 (forward-sexp)
+                                                 (point)))))))
+      (concat
+       ;; word
+       (let ((word
+              (assoc-default
+               "word" wotd-alist)))
+         (format "<h1><a href=\"%s\">%s</a></h1>"
+                 (format "http://www.dictionary.com/browse/%s"
+                         (url-hexify-string word))
+                 word))
+       ;; pos & pronunciation
+       (format "<p>%s [%s]</p>"
+               (assoc-default "pos" wotd-alist)
+               (assoc-default "pronunciation" wotd-alist))
+       ;; definitions
+       (format "<h3><strong>- Definitions</strong></h3><ul><li>%s</ul>"
+               (mapconcat #'identity
+                          (assoc-default "definitions" wotd-alist)
+                          "<li>"))
+       ;; origin
+       (format "<h3><strong>- Origin</strong></h3>%s"
+               (assoc-default "origin" wotd-alist))
+       ;; citations
+       (format "<h3><strong>- Citations</strong></h3><ul>%s</ul>"
+               (mapconcat (lambda (cite)
+                            (format "<li>%s<br/> -- %s, %s"
+                                    (assoc-default "quote" cite)
+                                    (assoc-default "author" cite)
+                                    (assoc-default "source" cite)
+                                    ))
+                          (assoc-default "citations" wotd-alist)
+                          ""))))))
+
 (defun wotd--get-bing-dict ()
   (wotd--def-html-parser
       "*Bing Dict*"
@@ -299,6 +360,21 @@ XML encoding declaration."
        "/dict/search" "http://www.bing.com/dict/search"
        (buffer-substring beg end)))))
 
+(url-unhex-string "http%3A%2F%2Fstatic.sfdict.com%2Fstatic%2Fwotd%2Ftiles%2F20170311_canard.png")
+(switch-to-buffer
+ (url-retrieve-synchronously
+  "http://www.dictionary.com/wordoftheday/2017/3/11"))
+(switch-to-buffer
+ (url-retrieve-synchronously
+  "http://static.sfdict.com/static/wotd/tiles/20170311_canard.png"))
+(switch-to-buffer
+ (url-retrieve-synchronously
+  "http://restcdn.dictionary.com/v2/wordoftheday.json?\
+api_key=KgprXEYKVnNSFSZ\
+&past=0&future=0\
+&year=2017&month=3&day=11&callback=jQuery21408437490691929453_1489270736001"))
+;;; TODO
+;;; dictionary.com
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
