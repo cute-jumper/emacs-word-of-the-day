@@ -27,8 +27,30 @@
 (require 'url)
 (require 'xml)
 (require 'shr)
+(require 'org-table)
+
+(defvar wotd-buffer "*Summary: Word of The Day")
+
+(defvar wotd-supported-sources
+  '(merriam-webster
+    wiktionary
+    macmillan
+    wordsmith
+    free-dictionary
+    oxford-english-dictionary
+    urban-dictionary
+    wordthink
+    oxford-dictionaries
+    cambridge-dictionary
+    collins-dictionary
+    learners-dictionary
+    wordnik
+    dictionary-dot-com
+    bing-dict))
 
 (defvar wotd--enable-debug nil)
+(defvar wotd--sync nil)
+(defvar wotd--interactive t)
 (defvar wotd--debug-buffer "*WOTD Debug*")
 (defvar wotd--default-buf-name "*Word-of-The-Day*")
 
@@ -76,289 +98,392 @@ XML encoding declaration."
                        (set-buffer-multibyte t)
                        ,@body)))))
 
-(defmacro wotd--def-xml-parser (buf-name url content &rest cleanups)
-  (declare (indent 3))
-  `(wotd--retrieve
-    ,url nil
-    (let ((it (wotd-xml-parse-region (point) (point-max))))
-      (with-current-buffer (get-buffer-create ,buf-name)
-        (erase-buffer)
-        (insert ,content)
-        ,@(apply #'append
-                 (mapcar (lambda (fn)
-                           `((goto-char (point-min))
-                             ,fn))
-                         cleanups))
-        (let ((dom (libxml-parse-html-region (point-min) (point-max))))
-          (erase-buffer)
-          (shr-insert-document dom)
-          (goto-char (point-min))))
-      (display-buffer ,buf-name t))))
+(defmacro wotd--def-parser (type sync buf-name url &rest body)
+  (declare (indent 4))
+  (let ((real-buf-name (format "*Word of the Day: %s*" buf-name)))
+    `(wotd--retrieve
+      ,url ,sync
+      (delete-region (point-min) (point))
+      (let* (,(if (eq type 'html)
+                  'it
+                '(it (wotd-xml-parse-region (point) (point-max))))
+             (res (progn ,@body))
+             (content (if ,sync (cdr res) res))
+             dom)
+        (wotd--debug res)
+        (setq content (with-temp-buffer
+                        (set-buffer-multibyte t)
+                        (insert content)
+                        (setq dom (libxml-parse-html-region
+                                   (point-min) (point-max)))
+                        (erase-buffer)
+                        (shr-insert-document dom)
+                        (buffer-string)))
+        ,(if sync
+             '(cons (car res) content)
+           `(progn
+              (with-current-buffer (get-buffer-create ,real-buf-name)
+                (erase-buffer)
+                (insert content))
+              (display-buffer ,real-buf-name)))))))
 
-(defmacro wotd--def-html-parser (buf-name url &rest body)
-  (declare (indent 2))
-  `(wotd--retrieve
-    ,url nil
-    (delete-region (point-min) (point))
-    (let ((res (progn ,@body))
-          dom)
-      (wotd--debug res)
-      (with-current-buffer (get-buffer-create ,buf-name)
-        (set-buffer-multibyte t)
-        (erase-buffer)
-        (insert res)
-        (setq dom (libxml-parse-html-region (point-min) (point-max)))
-        (erase-buffer)
-        (shr-insert-document dom)
-        (goto-char (point-min)))
-      (display-buffer ,buf-name t))))
+(defun wotd--get-merriam-webster (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Merriam-Webster"
+             "https://www.merriam-webster.com/wotd/feed/rss2"
+           (let* ((item (car (xml-get-children
+                              (car (xml-get-children (car it) 'channel))
+                              'item)))
+                  (html (replace-regexp-in-string
+                         "&#149;" "&#8226;"
+                         (nth 2 (car (xml-get-children item 'description))))))
+             ,(if sync
+                  '(cons (nth 2 (car (xml-get-children item 'title)))
+                         html)
+                'html)))))
 
-(defun wotd--get-merriam-webster ()
-  (wotd--def-xml-parser
-      "*Merriam-Webster*"
-      "https://www.merriam-webster.com/wotd/feed/rss2"
-      (nth 2 (car (xml-get-children
-                   (car (xml-get-children
-                         (car (xml-get-children (car it) 'channel))
-                         'item))
-                   'description)))
-    (replace-string "&#149;" "&#8226;")))
+(defun wotd--get-wiktionary (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Wiktionary"
+             "https://en.wiktionary.org/w/api.php?action=featuredfeed&feed=wotd"
+           (let* ((item (car (last (xml-get-children
+                                    (car (xml-get-children (car it) 'channel))
+                                    'item))))
+                  (html (nth 2 (car (xml-get-children
+                                     item
+                                     'description)))))
+             (with-temp-buffer
+               (insert html)
+               (goto-char (point-min))
+               (re-search-forward "<table" nil t)
+               (delete-region (point-min) (match-beginning 0))
+               (setq html (buffer-string)))
+             ,(if sync
+                  '(cons (nth 2 (car (xml-get-children
+                                      item
+                                      'title)))
+                         html)
+                'html)))))
 
-(defun wotd--get-wiktionary ()
-  (wotd--def-xml-parser
-      "*Wiktionary*"
-      "https://en.wiktionary.org/w/api.php?action=featuredfeed&feed=wotd"
-      (nth 2 (car (xml-get-children
-                   (last (xml-get-children
-                          (car (xml-get-children (car it) 'channel))
-                          'item))
-                   'description)))
-    (replace-string "href=\"//" "href=\"https://")
-    (replace-string "href=\"/wiki" "href=\"https://en.wiktionary.org/wiki")))
+(defun wotd--get-macmillan (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Macmillan"
+             "http://www.macmillandictionary.com/wotd/wotdrss.xml"
+           (let* ((entry (car (last (xml-get-children (car it) 'entry))))
+                  (title (nth 2 (car (xml-get-children entry 'title))))
+                  (href (cdr (nth 1 (cadr (car (xml-get-children entry 'link))))))
+                  (date (nth 2 (car (xml-get-children entry 'updated))))
+                  (summary (nth 2 (car (xml-get-children entry 'summary))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                                href
+                                title
+                                date
+                                summary)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-macmillan ()
-  (wotd--def-xml-parser
-      "*Macmillan*"
-      "http://www.macmillandictionary.com/wotd/wotdrss.xml"
-      (let* ((entry (car (last (xml-get-children (car it) 'entry))))
-             (title (nth 2 (car (xml-get-children entry 'title))))
-             (href (cdr (nth 1 (cadr (car (xml-get-children entry 'link))))))
-             (date (nth 2 (car (xml-get-children entry 'updated))))
-             (summary (nth 2 (car (xml-get-children entry 'summary)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
-                href
-                title
-                date
-                summary))))
+(defun wotd--get-wordsmith (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Wordsmith"
+             "https://www.wordsmith.org/awad/rss1.xml"
+           (let* ((item (car (xml-get-children
+                              (car (xml-get-children (car it) 'channel))
+                              'item)))
+                  (title (nth 2 (car (xml-get-children item 'title))))
+                  (href (nth 2 (car (xml-get-children item 'link))))
+                  (description (nth 2 (car (xml-get-children item 'description))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-wordsmith ()
-  (wotd--def-xml-parser
-      "*Wordsmith*"
-      "https://www.wordsmith.org/awad/rss1.xml"
-      (let* ((item (car (xml-get-children
-                         (car (xml-get-children (car it) 'channel))
-                         'item)))
-             (title (nth 2 (car (xml-get-children item 'title))))
-             (href (nth 2 (car (xml-get-children item 'link))))
-             (description (nth 2 (car (xml-get-children item 'description)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description))))
+(defun wotd--get-free-dictionary (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Free Dictionary"
+             "http://www.thefreedictionary.com/_/WoD/rss.aspx"
+           (let* ((item (car (xml-get-children
+                              (car (xml-get-children (car it) 'channel))
+                              'item)))
+                  (title (nth 2 (car (xml-get-children item 'title))))
+                  (href (nth 2 (car (xml-get-children item 'link))))
+                  (date (nth 2 (car (xml-get-children item 'pubDate))))
+                  (description (nth 2 (car (xml-get-children item 'description))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                                href title date description)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-free-dictionary ()
-  (wotd--def-xml-parser
-      "*Free Dictionary*"
-      "http://www.thefreedictionary.com/_/WoD/rss.aspx"
-      (let* ((item (car (xml-get-children
-                         (car (xml-get-children (car it) 'channel))
-                         'item)))
-             (title (nth 2 (car (xml-get-children item 'title))))
-             (href (nth 2 (car (xml-get-children item 'link))))
-             (date (nth 2 (car (xml-get-children item 'pubDate))))
-             (description (nth 2 (car (xml-get-children item 'description)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
-                href title date description))))
+(defun wotd--get-oxford-english-dictionary (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Oxford English Dictionary"
+             "http://www.oed.com/rss/wordoftheday"
+           (let* ((item (car (last (xml-get-children
+                                    (car (xml-get-children (car it) 'channel))
+                                    'item))))
+                  (title (nth 2 (car (xml-get-children item 'title))))
+                  (href (nth 2 (car (xml-get-children item 'link))))
+                  (date (nth 2 (car (xml-get-children item 'pubDate))))
+                  (description (nth 2 (car (xml-get-children item 'description))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                                href title date description)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-oxford-english-dictionary ()
-  (wotd--def-xml-parser
-      "*Oxford English Dictionary*"
-      "http://www.oed.com/rss/wordoftheday"
-      (let* ((item (car (last (xml-get-children
-                               (car (xml-get-children (car it) 'channel))
-                               'item))))
-             (title (nth 2 (car (xml-get-children item 'title))))
-             (href (nth 2 (car (xml-get-children item 'link))))
-             (date (nth 2 (car (xml-get-children item 'pubDate))))
-             (description (nth 2 (car (xml-get-children item 'description)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
-                href title date description))))
+(defun wotd--get-urban-dictionary (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "Urban Dictionary"
+             "http://feeds.urbandictionary.com/UrbanWordOfTheDay"
+           (let* ((item (car (xml-get-children
+                              (car (xml-get-children (car it) 'channel))
+                              'item)))
+                  (title (nth 2 (car (xml-get-children item 'title))))
+                  (href (nth 2 (car (xml-get-children item 'link))))
+                  (date (nth 2 (car (xml-get-children item 'pubDate))))
+                  (description (nth 2 (car (xml-get-children item 'description))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                                href title date description)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-urban-dictionary ()
-  (wotd--def-xml-parser
-      "*Urban Dictionary*"
-      "http://feeds.urbandictionary.com/UrbanWordOfTheDay"
-      (let* ((item (car (xml-get-children
-                         (car (xml-get-children (car it) 'channel))
-                         'item)))
-             (title (nth 2 (car (xml-get-children item 'title))))
-             (href (nth 2 (car (xml-get-children item 'link))))
-             (date (nth 2 (car (xml-get-children item 'pubDate))))
-             (description (nth 2 (car (xml-get-children item 'description)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
-                href title date description))))
+(defun wotd--get-wordthink (&optional sync)
+  (eval `(wotd--def-parser xml
+             ,sync
+             "WordThink"
+             "http://www.wordthink.com/feed/"
+           (let* ((item (car (xml-get-children
+                              (car (xml-get-children (car it) 'channel))
+                              'item)))
+                  (title (nth 2 (car (xml-get-children item 'title))))
+                  (href (nth 2 (car (xml-get-children item 'link))))
+                  (date (nth 2 (car (xml-get-children item 'pubDate))))
+                  (description (nth 2 (car (xml-get-children item 'description))))
+                  (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
+                                href title date description)))
+             ,(if sync
+                  '(cons title html)
+                'html)))))
 
-(defun wotd--get-wordthink ()
-  (wotd--def-xml-parser
-      "*WordThink*"
-      "http://www.wordthink.com/feed/"
-      (let* ((item (car (xml-get-children
-                         (car (xml-get-children (car it) 'channel))
-                         'item)))
-             (title (nth 2 (car (xml-get-children item 'title))))
-             (href (nth 2 (car (xml-get-children item 'link))))
-             (date (nth 2 (car (xml-get-children item 'pubDate))))
-             (description (nth 2 (car (xml-get-children item 'description)))))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p><p>%s</p>"
-                href title date description))))
+(defun wotd--get-oxford-dictionaries (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Oxford Dictionaries"
+             "https://en.oxforddictionaries.com/"
+           (when (re-search-forward
+                  "Word of the Day.*?<a.*?>\\(.*?\\)</a>"
+                  nil
+                  t)
+             (let* ((title (match-string 1))
+                    (href (format "https://en.oxforddictionaries.com/definition/%s" title))
+                    (html (format "<h1>%s</h1><a href=\"%s\">See the definition and examples</a>" title href)))
+               ,(if sync
+                    '(cons title html)
+                  'html))))))
 
-(defun wotd--get-oxford-dictionaries ()
-  (wotd--def-html-parser
-      "*Oxford Dictionaries*"
-      "https://en.oxforddictionaries.com/"
-    (when (re-search-forward
-           "Word of the Day.*?<a.*?>\\(.*?\\)</a>"
-           nil
-           t)
-      (let* ((title (match-string 1))
-             (href (format "https://en.oxforddictionaries.com/definition/%s" title)))
-        (format "<h1>%s</h1><a href=\"%s\">See the definition and examples</a>" title href)))))
+(defun wotd--get-cambridge-dictionary (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Cambridge Dictionary"
+             "http://dictionary.cambridge.org/us/"
+           (when (re-search-forward
+                  "<p class=\"h4 feature-w-big wotd-hw\">\\(.*?\\)</p><p>\\(.*\\)</p>"
+                  nil
+                  t)
+             (let* ((title (match-string 1))
+                    (href (format "http://dictionary.cambridge.org/us/dictionary/british/%s"
+                                  (url-hexify-string title)))
+                    (description (match-string 2))
+                    (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>"
+                                  href title description)))
+               ,(if sync
+                    '(cons title html)
+                  'html))))))
 
-(defun wotd--get-cambridge-dictionary ()
-  (wotd--def-html-parser
-      "*Cambridge Dictionary*"
-      "http://dictionary.cambridge.org/us/"
-    (when (re-search-forward
-           "<p class=\"h4 feature-w-big wotd-hw\">\\(.*?\\)</p><p>\\(.*\\)</p>"
-           nil
-           t)
-      (let* ((title (match-string 1))
-             (href (format "http://dictionary.cambridge.org/us/dictionary/british/%s"
-                           (url-hexify-string title)))
-             (description (match-string 2)))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
+(defun wotd--get-collins-dictionary (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Collins Dictionary"
+             "https://www.collinsdictionary.com/dictionary/english"
+           (replace-string "\n" "")
+           (message "")
+           (goto-char (point-min))
+           (when (re-search-forward
+                  "Word of the day.*?\"promoBox-title\">\\(.*?\\)</div>.*?\"promoBox-description\">\\(.*?\\)</div>"
+                  nil
+                  t)
+             (let* ((title (match-string 1))
+                    (href (format "https://www.collinsdictionary.com/dictionary/english/%s"
+                                  (url-hexify-string (replace-regexp-in-string " " "-" title))))
+                    (description (match-string 2))
+                    (html (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>"
+                                  href title description)))
+               ,(if sync
+                    '(cons title html)
+                  'html))))))
 
-(defun wotd--get-collins-dictionary ()
-  (wotd--def-html-parser
-      "*Collins Dictionary*"
-      "https://www.collinsdictionary.com/dictionary/english"
-    (replace-regexp "\n" "")
-    (goto-char (point-min))
-    (when (re-search-forward
-           "Word of the day.*?\"promoBox-title\">\\(.*?\\)</div>.*?\"promoBox-description\">\\(.*?\\)</div>"
-           nil
-           t)
-      (let* ((title (match-string 1))
-             (href (format "https://www.collinsdictionary.com/dictionary/english/%s"
-                           (url-hexify-string (replace-regexp-in-string " " "-" title))))
-             (description (match-string 2)))
-        (format "<h1><a href=\"%s\">%s</a></h1><p>%s</p>" href title description)))))
-
-(defun wotd--get-learners-dictionary ()
-  (wotd--def-html-parser
-      "*Learners Dictionary*"
-      "http://learnersdictionary.com/word-of-the-day"
-    (let* ((beg (re-search-forward "<!--WOD content-->" nil t))
-           (end (re-search-forward "<!--WOD Archive-->" nil t))
-           (content (buffer-substring beg end)))
-      (with-temp-buffer
-        (insert content)
-        (goto-char (point-min))
-        (replace-regexp "[\r\n]" "")
-        (goto-char (point-min))
-        (replace-regexp "<span class = \"hpron_word voces_font\">/.*?/</span>\\|\
+(defun wotd--get-learners-dictionary (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Learners Dictionary"
+             "http://learnersdictionary.com/word-of-the-day"
+           (let* ((beg (re-search-forward "<!--WOD content-->" nil t))
+                  (end (re-search-forward "<!--WOD Archive-->" nil t))
+                  (html (buffer-substring beg end)))
+             (setq html
+                   (with-temp-buffer
+                     (insert html)
+                     (goto-char (point-min))
+                     (replace-regexp "[\r\n]" "")
+                     (goto-char (point-min))
+                     (replace-regexp "<span class = \"hpron_word voces_font\">/.*?/</span>\\|\
 <!--headword: mobile view-->.*<!--hwpost-->" "")
-        (string-join
-         (delq nil
-               (mapcar
-                (lambda (ch) (encode-coding-char ch 'utf-8 'unicode))
-                (buffer-string))))))))
+                     (message "")
+                     (string-join
+                      (delq nil
+                            (mapcar
+                             (lambda (ch) (encode-coding-char ch 'utf-8 'unicode))
+                             (buffer-string))))))
+             ,(if sync
+                  '(with-temp-buffer
+                     (insert html)
+                     (goto-char (point-min))
+                     (re-search-forward "<span class = \"hw_txt.*?>\\(.*?\\)</span>")
+                     (cons (match-string 1) html))
+                'html)))))
 
-(defun wotd--get-wordnik ()
-  (wotd--def-html-parser
-      "*Wordnik*"
-      "https://www.wordnik.com/word-of-the-day"
-    (let ((beg (re-search-forward "<div class=\"word_of_the_day\">" nil t))
-          (end (re-search-forward "<!-- Wordnik announcement -->" nil t)))
-      (buffer-substring beg end))))
+(defun wotd--get-wordnik (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Wordnik"
+             "https://www.wordnik.com/word-of-the-day"
+           (let* ((beg (re-search-forward "<div class=\"word_of_the_day\">" nil t))
+                  (end (re-search-forward "<!-- Wordnik announcement -->" nil t))
+                  (html (buffer-substring beg end)))
+             ,(if sync
+                  '(with-temp-buffer
+                     (insert html)
+                     (goto-char (point-min))
+                     (re-search-forward "<h1><a.*?>\\(.*?\\)</a></h1>")
+                     (cons (match-string 1) html))
+                'html)))))
 
-(defun wotd--get-dictionary-dot-com ()
-  (wotd--def-html-parser
-      "*dictionary.com*"
-      (concat "http://www.dictionary.com/wordoftheday/"
-              (format-time-string "%Y/%m/%d"))
-    (let ((json-key-type 'string)
-          wotd-alist
-          word
-          pos-pronun
-          definitions
-          origin
-          cite
-          citations)
-      (re-search-forward "return {\"leader" nil t)
-      (goto-char (match-beginning 0))
-      (forward-word)
-      (buffer-substring (point)
-                        (save-excursion
-                          (forward-sexp)
-                          (point)))
-      (setq wotd-alist
-            (assoc-default
-             (format-time-string "%Y-%m-%d")
-             (assoc-default "days"
-                            (json-read-from-string
-                             (buffer-substring (point)
-                                               (save-excursion
-                                                 (forward-sexp)
-                                                 (point)))))))
-      (concat
-       ;; word
-       (let ((word
-              (assoc-default
-               "word" wotd-alist)))
-         (format "<h1><a href=\"%s\">%s</a></h1>"
-                 (format "http://www.dictionary.com/browse/%s"
-                         (url-hexify-string word))
-                 word))
-       ;; pos & pronunciation
-       (format "<p>%s [%s]</p>"
-               (assoc-default "pos" wotd-alist)
-               (assoc-default "pronunciation" wotd-alist))
-       ;; definitions
-       (format "<h3><strong>- Definitions</strong></h3><ul><li>%s</ul>"
-               (mapconcat #'identity
-                          (assoc-default "definitions" wotd-alist)
-                          "<li>"))
-       ;; origin
-       (format "<h3><strong>- Origin</strong></h3>%s"
-               (assoc-default "origin" wotd-alist))
-       ;; citations
-       (format "<h3><strong>- Citations</strong></h3><ul>%s</ul>"
-               (mapconcat (lambda (cite)
-                            (format "<li>%s<br/> -- %s, %s"
-                                    (assoc-default "quote" cite)
-                                    (assoc-default "author" cite)
-                                    (assoc-default "source" cite)
-                                    ))
-                          (assoc-default "citations" wotd-alist)
-                          ""))))))
+(defun wotd--get-dictionary-dot-com (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "dictionary.com"
+             (concat "http://www.dictionary.com/wordoftheday/"
+                     (format-time-string "%Y/%m/%d"))
+           (let ((json-key-type 'string)
+                 wotd-alist
+                 word
+                 html)
+             (re-search-forward "return {\"leader" nil t)
+             (goto-char (match-beginning 0))
+             (forward-word)
+             (buffer-substring (point)
+                               (save-excursion
+                                 (forward-sexp)
+                                 (point)))
+             (setq wotd-alist
+                   (assoc-default
+                    (format-time-string "%Y-%m-%d")
+                    (assoc-default "days"
+                                   (json-read-from-string
+                                    (buffer-substring (point)
+                                                      (save-excursion
+                                                        (forward-sexp)
+                                                        (point)))))))
+             (setq word (assoc-default
+                         "word" wotd-alist))
+             (setq html
+                   (concat
+                    ;; word
+                    (format "<h1><a href=\"%s\">%s</a></h1>"
+                            (format "http://www.dictionary.com/browse/%s"
+                                    (url-hexify-string word))
+                            word)
+                    ;; pos & pronunciation
+                    (format "<p>%s [%s]</p>"
+                            (assoc-default "pos" wotd-alist)
+                            (assoc-default "pronunciation" wotd-alist))
+                    ;; definitions
+                    (format "<h3><strong>- Definitions</strong></h3><ul><li>%s</ul>"
+                            (mapconcat #'identity
+                                       (assoc-default "definitions" wotd-alist)
+                                       "<li>"))
+                    ;; origin
+                    (format "<h3><strong>- Origin</strong></h3>%s"
+                            (assoc-default "origin" wotd-alist))
+                    ;; citations
+                    (format "<h3><strong>- Citations</strong></h3><ul>%s</ul>"
+                            (mapconcat (lambda (cite)
+                                         (format "<li>%s<br/> -- %s, %s"
+                                                 (assoc-default "quote" cite)
+                                                 (assoc-default "author" cite)
+                                                 (assoc-default "source" cite)
+                                                 ))
+                                       (assoc-default "citations" wotd-alist)
+                                       ""))))
+             ,(if sync
+                  '(cons word html)
+                'html)))))
 
-(defun wotd--get-bing-dict ()
-  (wotd--def-html-parser
-      "*Bing Dict*"
-      "http://www.bing.com/dict/?mkt=zh-cn"
-    (let ((beg (re-search-forward "<div class=\"client_daily_words_panel\">" nil t))
-          (end (re-search-forward "</div><div class=\"client_daily_pic_bar\">" nil t)))
-      (replace-regexp-in-string
-       "/dict/search" "http://www.bing.com/dict/search"
-       (buffer-substring beg end)))))
+(defun wotd--get-bing-dict (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "Bing Dict"
+             "http://www.bing.com/dict/?mkt=zh-cn"
+           (let* ((beg (re-search-forward "<div class=\"client_daily_words_panel\">" nil t))
+                  (end (re-search-forward "</div><div class=\"client_daily_pic_bar\">" nil t))
+                  (html (replace-regexp-in-string
+                         "/dict/search" "http://www.bing.com/dict/search"
+                         (buffer-substring beg end))))
+             ,(if sync
+                  '(with-temp-buffer
+                     (insert html)
+                     (goto-char (point-min))
+                     (re-search-forward "<a .*?>\\(.*?\\)</a>")
+                     (cons (match-string 1) html))
+                'html)))))
+
+(defun wotd--get-formatted-text (func)
+  (let ((wotd--sync t)
+        (wotd--interactive nil))
+    (funcall func t)))
+
+(defun wotd-show (source)
+  (interactive
+   (list (completing-read "Select a source: " wotd-supported-sources)))
+  (let ((func (intern (format "wotd--get-%s" source))))
+    (funcall func)))
+
+(defun wotd-all ()
+  (interactive)
+  (let ((wotd--sync t)
+        (wotd--interactive nil))
+    (with-current-buffer (get-buffer-create wotd-buffer)
+      (erase-buffer)
+      (unless (bound-and-true-p orgstruct-mode)
+        (orgstruct-mode +1))
+      (insert (with-temp-buffer
+                (insert "* first\n")
+                (insert (replace-regexp-in-string "\n" "\n  " (wotd--get-wordnik)))
+                (delete-backward-char 2)
+                (insert "* second\n")
+                (insert (replace-regexp-in-string "\n" "\n  "(wotd--get-dictionary-dot-com)))
+                (buffer-string))))
+    (unless (get-buffer-window wotd-buffer)
+      (display-buffer wotd-buffer))))
 
 (provide 'word-of-the-day)
 ;;; word-of-the-day.el ends here
