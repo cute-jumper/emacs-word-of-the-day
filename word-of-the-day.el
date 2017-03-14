@@ -47,6 +47,7 @@
     learners-dictionary
     wordnik
     dictionary-dot-com
+    5-minute-english
     bing-dict))
 
 (defvar wotd--enable-debug nil)
@@ -54,10 +55,10 @@
 (defvar wotd--default-buf-name "*Word-of-The-Day*")
 
 (defun wotd--debug (s)
-  (if wotd--enable-debug
-      (with-current-buffer (get-buffer-create wotd--debug-buffer)
-        (erase-buffer)
-        (insert (format "%s" s))))
+  (when wotd--enable-debug
+    (with-current-buffer (get-buffer-create wotd--debug-buffer)
+      (erase-buffer)
+      (insert (format "%s" s))))
   s)
 
 ;; Steal from `elfeed'
@@ -158,9 +159,6 @@ XML encoding declaration."
              (with-temp-buffer
                (insert html)
                (goto-char (point-min))
-               (re-search-forward "<table" nil t)
-               (delete-region (point-min) (match-beginning 0))
-               (setq html (buffer-string))
                (re-search-forward "<span id=\"WOTD-rss-title\">\\(.*?\\)</span>")
                (setq title (match-string 1)))
              ,(if sync
@@ -453,6 +451,18 @@ XML encoding declaration."
                      (goto-char (point-min))
                      (re-search-forward "<a .*?>\\(.*?\\)</a>")
                      (cons (match-string 1) html))
+                'html)))))
+
+(defun wotd--get-5-minute-english (&optional sync)
+  (eval `(wotd--def-parser html
+             ,sync
+             "5 Minute English"
+             "http://www.5minuteenglish.com/iframes/word.php"
+           (re-search-forward "<b style='text-transform:capitalize'>\\(.*?\\)</b>" nil t)
+           (let ((title (match-string 1))
+                 (html (buffer-substring (match-beginning 0) (point-max))))
+             ,(if sync
+                  '(cons title html)
                 'html)))))
 
 (defun wotd-show (source)
