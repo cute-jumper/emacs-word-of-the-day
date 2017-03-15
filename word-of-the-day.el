@@ -54,7 +54,7 @@
 
 (defvar wotd--enable-debug nil)
 (defvar wotd--debug-buffer "*WOTD Debug*")
-(defvar wotd--default-buf-name "*Word-of-The-Day*")
+(defvar wotd--default-buf-name "*Word-of-the-Day*")
 
 (defun wotd--debug (s)
   (when wotd--enable-debug
@@ -467,7 +467,7 @@ XML encoding declaration."
                   '(cons title html)
                 'html)))))
 
-(defun wotd-show (source)
+(defun wotd-select (source)
   (interactive
    (list (completing-read "Select a source: " wotd-enabled-sources)))
   (let ((func (intern (format "wotd--get-%s" source))))

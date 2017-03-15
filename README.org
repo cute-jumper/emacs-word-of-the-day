@@ -5,23 +5,23 @@ Show /Word of the Day/ from 15 online sources in Emacs!
 * Available Sources
   - Merriam Webster
   - Wiktionary
-  - macmillan
-  - wordsmith
+  - Macmillan Dictionary
+  - Wordsmith
   - Free Dictionary
   - Oxford English Dictionary
   - Urban Dictionary
-  - wordthink
+  - WordThink
   - Oxford Dictionaries
   - Cambridge Dictionary
   - Collins Dictionary
   - Learners Dictionary
-  - wordnik
+  - Wordnik
   - Dictionary.com
   - 5minuteenglish.com
-  - bing dict (English word, Chinese definitions)
+  - Bing dict (English word, Chinese definitions)
 
 * Commands
-** =M-x wotd-show=
+** =M-x wotd-select=
    Show a word-of-the-day by selecting a source from =wotd-enabled-sources=.
 
    This works asynchronously.
