@@ -50,6 +50,8 @@
     5-minute-english
     bing-dict))
 
+(defvar wotd-enabled-sources (delq 'bing-dict wotd-supported-sources))
+
 (defvar wotd--enable-debug nil)
 (defvar wotd--debug-buffer "*WOTD Debug*")
 (defvar wotd--default-buf-name "*Word-of-The-Day*")
@@ -467,7 +469,7 @@ XML encoding declaration."
 
 (defun wotd-show (source)
   (interactive
-   (list (completing-read "Select a source: " wotd-supported-sources)))
+   (list (completing-read "Select a source: " wotd-enabled-sources)))
   (let ((func (intern (format "wotd--get-%s" source))))
     (funcall func)))
 
@@ -477,7 +479,7 @@ XML encoding declaration."
     (erase-buffer)
     (unless (bound-and-true-p orgstruct-mode)
       (orgstruct-mode +1))
-    (dolist (source wotd-supported-sources)
+    (dolist (source wotd-enabled-sources)
       (let* ((func (intern (format "wotd--get-%s" source)))
              (result (funcall func t)))
         (insert (with-temp-buffer
@@ -486,7 +488,7 @@ XML encoding declaration."
                                       'org-level-1)
                           "\n  ")
                   (insert (replace-regexp-in-string "\n" "\n  " (cdr result)))
-                  (delete-backward-char 2)
+                  (delete-char -2)
                   (buffer-string))
                 "\n")))
     (goto-char (point-min))
