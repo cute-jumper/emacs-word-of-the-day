@@ -1,0 +1,38 @@
+#+TITLE: Word of the Day
+
+Show /Word of the Day/ from 15 online sources in Emacs!
+
+* Available Sources
+  - Merriam Webster
+  - Wiktionary
+  - macmillan
+  - wordsmith
+  - Free Dictionary
+  - Oxford English Dictionary
+  - Urban Dictionary
+  - wordthink
+  - Oxford Dictionaries
+  - Cambridge Dictionary
+  - Collins Dictionary
+  - Learners Dictionary
+  - wordnik
+  - Dictionary.com
+  - 5minuteenglish.com
+  - bing dict (English word, Chinese definitions)
+
+* Commands
+** =M-x wotd-show=
+   Show a word-of-the-day by selecting a source from =wotd-enabled-sources=.
+
+   This works asynchronously.
+** =M-x wotd-all=
+   Show all the word-of-the-day from =wotd-enabled-sources= in a summary buffer.
+
+   This works synchronously. (may be changed later)
+
+* Config
+  =wotd-enabled-sources= controls which sources are enabled. By default, all the
+  sources except =bing dict= are enabled. You can customize the variable.
+
+* On MELPA?
+  Not ready.
