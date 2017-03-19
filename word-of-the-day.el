@@ -468,6 +468,7 @@ XML encoding declaration."
                 'html)))))
 
 (defun wotd-select (source)
+  "Show word-of-the-day from SOURCE."
   (interactive
    (list (completing-read "Select a source: " wotd-enabled-sources)))
   (let ((func (intern (format "wotd--get-%s" source))))
@@ -475,6 +476,7 @@ XML encoding declaration."
 
 (defun wotd-all ()
   (interactive)
+  "Show all the `word-of-the-day's."
   (with-current-buffer (get-buffer-create wotd-buffer)
     (erase-buffer)
     (unless (bound-and-true-p orgstruct-mode)
