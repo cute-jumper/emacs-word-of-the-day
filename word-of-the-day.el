@@ -28,6 +28,7 @@
 (require 'xml)
 (require 'shr)
 (require 'org-table)
+(require 'org)
 
 (defvar wotd-buffer "*Summary: Word of The Day")
 (defvar wotd-render-width (frame-width))
@@ -485,7 +486,7 @@ XML encoding declaration."
       (let* ((func (intern (format "wotd--get-%s" source)))
              (result (funcall func t)))
         (insert (with-temp-buffer
-                  (insert (propertize (format "* %s" (car result))
+                  (insert (propertize (format "* [%s] %s" source (car result))
                                       'face
                                       'org-level-1)
                           "\n  ")
