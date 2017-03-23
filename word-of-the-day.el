@@ -105,6 +105,7 @@
 (require 'url)
 (require 'xml)
 (require 'shr)
+(require 'json)
 (require 'org-table)
 (require 'org)
 
