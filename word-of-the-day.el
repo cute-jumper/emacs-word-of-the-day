@@ -560,8 +560,8 @@ XML encoding declaration."
 
 ;;;###autoload
 (defun wotd-all ()
-  (interactive)
   "Show all the `word-of-the-day's."
+  (interactive)
   (with-current-buffer (get-buffer-create wotd-buffer)
     (erase-buffer)
     (unless (bound-and-true-p orgstruct-mode)
