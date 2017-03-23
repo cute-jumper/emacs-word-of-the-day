@@ -272,7 +272,7 @@ XML encoding declaration."
   (eval `(wotd--def-parser xml
              ,sync
              "Wordsmith"
-             "https://www.wordsmith.org/awad/rss1.xml"
+             "http://www.wordsmith.org/awad/rss1.xml"
            (let* ((item (car (xml-get-children
                               (car (xml-get-children (car it) 'channel))
                               'item)))
