@@ -549,6 +549,7 @@ XML encoding declaration."
                   '(cons title html)
                 'html)))))
 
+;;;###autoload
 (defun wotd-select (source)
   "Show word-of-the-day from SOURCE."
   (interactive
@@ -556,6 +557,7 @@ XML encoding declaration."
   (let ((func (intern (format "wotd--get-%s" source))))
     (funcall func)))
 
+;;;###autoload
 (defun wotd-all ()
   (interactive)
   "Show all the `word-of-the-day's."
