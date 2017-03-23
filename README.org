@@ -31,6 +31,8 @@ Show /Word of the Day/ from 15 online sources in Emacs!
 
    This works synchronously. (may be changed later)
 
+   Screenshot:
+   [[./screenshots/summary.png]]
 * Config
   See =wotd-supported-sources= for the complete list of all the supported online
   sources. You can set =wotd-enabled-sources= to controls which sources are
