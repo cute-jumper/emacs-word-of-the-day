@@ -41,7 +41,7 @@
 ;; 4 Contribution
 
 
-;; Show /Word of the Day/ from 14 online sources in Emacs!
+;; Show /Word of the Day/ from 15 online sources in Emacs!
 
 
 ;; 1 Available Sources
@@ -61,7 +61,7 @@
 ;;   - Learners Dictionary
 ;;   - Wordnik
 ;;   - Dictionary.com
-;;   - Bing dict (English word, Chinese definitions. See also
+;;   - Bing dict (English word, Chinese definitions.  See also
 ;;     [bing-dict.el])
 
 
@@ -86,7 +86,7 @@
 ;;   Show all the "word-of-the-day"s from `wotd-enabled-sources' in a
 ;;   summary buffer, which enables `orgstruct-mode' for easier navigation.
 
-;;   This works synchronously. (may be changed later)
+;;   This works synchronously.  (may be changed later)
 
 ;;   Screenshot: [./screenshots/summary.png]
 
@@ -95,9 +95,9 @@
 ;; ========
 
 ;;   See `wotd-supported-sources' for the complete list of all the
-;;   supported online sources. You can set `wotd-enabled-sources' to
-;;   controls which sources are enabled. By default, all the sources except
-;;   `bing dict' are enabled.
+;;   supported online sources.  You can set `wotd-enabled-sources' to
+;;   controls which sources are enabled.  By default, all the sources
+;;   except `bing dict' are enabled.
 
 
 ;; 4 Contribution
