@@ -1,4 +1,4 @@
-;;; word-of-the-day.el --- Fetch word-of-the-day from multiple online sources  -*- lexical-binding: t; -*-
+;;; wotd.el --- Fetch word-of-the-day from multiple online sources  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2017  Junpeng Qiu
 
@@ -544,5 +544,5 @@ XML encoding declaration."
         (forward-line))))
   (switch-to-buffer-other-window wotd-buffer))
 
-(provide 'word-of-the-day)
-;;; word-of-the-day.el ends here
+(provide 'wotd)
+;;; wotd.el ends here
