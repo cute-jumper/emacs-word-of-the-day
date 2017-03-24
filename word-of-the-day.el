@@ -41,7 +41,7 @@
 ;; 4 Contribution
 
 
-;; Show /Word of the Day/ from 15 online sources in Emacs!
+;; Show /Word of the Day/ from 14 online sources in Emacs!
 
 
 ;; 1 Available Sources
@@ -61,8 +61,11 @@
 ;;   - Learners Dictionary
 ;;   - Wordnik
 ;;   - Dictionary.com
-;;   - 5minuteenglish.com
-;;   - Bing dict (English word, Chinese definitions)
+;;   - Bing dict (English word, Chinese definitions. See also
+;;     [bing-dict.el])
+
+
+;; [bing-dict.el] https://github.com/cute-jumper/bing-dict.el
 
 
 ;; 2 Commands
@@ -84,6 +87,8 @@
 ;;   summary buffer, which enables `orgstruct-mode' for easier navigation.
 
 ;;   This works synchronously. (may be changed later)
+
+;;   Screenshot: [./screenshots/summary.png]
 
 
 ;; 3 Config
@@ -124,7 +129,7 @@
     learners-dictionary
     wordnik
     dictionary-dot-com
-    5-minute-english
+    ;; 5-minute-english
     bing-dict)
   "The complete list of the supported sources.")
 
