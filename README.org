@@ -1,4 +1,5 @@
 #+TITLE: Word of the Day
+[[https://melpa.org/#/wotd][file:https://melpa.org/packages/wotd-badge.svg]]
 
 Show /Word of the Day/ from 15 online sources in Emacs!
 

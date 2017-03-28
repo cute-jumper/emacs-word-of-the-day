@@ -41,7 +41,13 @@
 ;; 4 Contribution
 
 
+;; [[file:https://melpa.org/packages/wotd-badge.svg]]
+
 ;; Show /Word of the Day/ from 15 online sources in Emacs!
+
+
+;; [[file:https://melpa.org/packages/wotd-badge.svg]]
+;; https://melpa.org/#/wotd
 
 
 ;; 1 Available Sources
